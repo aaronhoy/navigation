@@ -98,6 +98,8 @@ private:
 
   bool publish_voxel_;
   ros::Publisher voxel_pub_;
+  ros::Publisher voxel_marker_pub_;
+  size_t voxel_marker_count_;
   voxel_grid::VoxelGrid voxel_grid_;
   double z_resolution_, origin_z_;
   unsigned int unknown_threshold_, mark_threshold_, size_z_;

@@ -38,6 +38,7 @@
 #include <costmap_2d/voxel_layer.h>
 #include <pluginlib/class_list_macros.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <visualization_msgs/MarkerArray.h>
 
 #define VOXEL_BITS 16
 PLUGINLIB_EXPORT_CLASS(costmap_2d::VoxelLayer, costmap_2d::Layer)
@@ -59,7 +60,11 @@ void VoxelLayer::onInitialize()
 
   private_nh.param("publish_voxel_map", publish_voxel_, false);
   if (publish_voxel_)
+  {
     voxel_pub_ = private_nh.advertise < costmap_2d::VoxelGrid > ("voxel_grid", 1);
+    voxel_marker_pub_ = private_nh.advertise < visualization_msgs::MarkerArray > ("voxel_markers", 1);
+    voxel_marker_count_ = 0;
+  }
 
   clearing_endpoints_pub_ = private_nh.advertise<sensor_msgs::PointCloud>("clearing_endpoints", 1);
 }
@@ -207,6 +212,68 @@ void VoxelLayer::updateBounds(double robot_x, double robot_y, double robot_yaw, 
     grid_msg.header.frame_id = global_frame_;
     grid_msg.header.stamp = ros::Time::now();
     voxel_pub_.publish(grid_msg);
+
+    // Also publish visualizable markers
+
+    // Base marker data
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = global_frame_;
+    marker.header.stamp = ros::Time::now();
+    marker.ns = "VoxelMarkers";
+    marker.type = visualization_msgs::Marker::CUBE;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.scale.x = resolution_;
+    marker.scale.y = resolution_;
+    marker.scale.z = z_resolution_;
+    marker.lifetime = ros::Duration(0);
+
+    visualization_msgs::MarkerArray markers;
+    size_t marker_count = 0;
+
+    // Loop through and add markers for the voxels that have obstacles
+    for (size_t z = 0; z < voxel_grid_.sizeZ(); z++)
+    {
+      for (size_t y = 0; y < voxel_grid_.sizeY(); y++)
+      {
+        for (size_t x = 0; x < voxel_grid_.sizeX(); x++)
+        {
+          voxel_grid::VoxelStatus status = voxel_grid_.getVoxel(x, y, z);
+
+          if (status == voxel_grid::MARKED)
+          {
+            visualization_msgs::Marker next_marker = marker;
+            next_marker.id = marker_count;
+
+            mapToWorld3D(x, y, z,
+                         next_marker.pose.position.x,
+                         next_marker.pose.position.y,
+                         next_marker.pose.position.z);
+
+            next_marker.color.r = 1.0;
+            next_marker.color.g = 0.0;
+            next_marker.color.b = 0.0;
+
+            next_marker.color.a = 1.0;
+
+            markers.markers.push_back(next_marker);
+            marker_count++;
+          }
+        }
+      }
+    }
+
+    // Also make sure to remove any remaining markers in case the number of marked ones decreased
+    voxel_marker_count_ = std::max(voxel_marker_count_, marker_count);
+    while (marker_count < voxel_marker_count_)
+    {
+      visualization_msgs::Marker next_marker = marker;
+      next_marker.id = marker_count++;
+      next_marker.action = visualization_msgs::Marker::DELETE;
+
+      markers.markers.push_back(next_marker);
+    }
+
+    voxel_marker_pub_.publish(markers);
   }
 
   updateFootprint(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
