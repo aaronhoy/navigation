@@ -1,5 +1,5 @@
 Header header
-uint32[] data
+uint64[] data
 geometry_msgs/Point32 origin
 geometry_msgs/Vector3 resolutions
 uint32 size_x

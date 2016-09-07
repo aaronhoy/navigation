@@ -40,7 +40,6 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/MarkerArray.h>
 
-#define VOXEL_BITS 16
 PLUGINLIB_EXPORT_CLASS(costmap_2d::VoxelLayer, costmap_2d::Layer)
 
 using costmap_2d::NO_INFORMATION;
@@ -91,10 +90,11 @@ void VoxelLayer::reconfigureCB(costmap_2d::VoxelPluginConfig &config, uint32_t l
   size_z_ = config.z_voxels;
   origin_z_ = config.origin_z;
   z_resolution_ = config.z_resolution;
-  unknown_threshold_ = config.unknown_threshold + (VOXEL_BITS - size_z_);
+  unknown_threshold_ = config.unknown_threshold;
   mark_threshold_ = config.mark_threshold;
   combination_method_ = config.combination_method;
   matchSize();
+  unknown_threshold_ += voxel_grid_.getZVoxelCount() - size_z_;
 }
 
 void VoxelLayer::matchSize()
@@ -478,8 +478,8 @@ void VoxelLayer::updateOrigin(double new_origin_x, double new_origin_y)
 
   // we need a map to store the obstacles in the window temporarily
   unsigned char* local_map = new unsigned char[cell_size_x * cell_size_y];
-  unsigned int* local_voxel_map = new unsigned int[cell_size_x * cell_size_y];
-  unsigned int* voxel_map = voxel_grid_.getData();
+  voxel_grid::VoxelDataColumn* local_voxel_map = new voxel_grid::VoxelDataColumn[cell_size_x * cell_size_y];
+  voxel_grid::VoxelDataColumn* voxel_map = voxel_grid_.getData();
 
   // copy the local window in the costmap to the local map
   copyMapRegion(costmap_, lower_left_x, lower_left_y, size_x_, local_map, 0, 0, cell_size_x, cell_size_x, cell_size_y);

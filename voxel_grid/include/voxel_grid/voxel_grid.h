@@ -51,10 +51,15 @@
  * @class VoxelGrid
  * @brief A 3D grid structure that stores points as an integer array.
  *        X and Y index the array and Z selects which bit of the integer
- *        is used giving a limit of 16 vertical cells.
+ *        is used giving a limit of Z_VOXELS vertical cells.
  */
 namespace voxel_grid
 {
+
+// TODO(ahoy): make these better than just defines?
+#define Z_VOXELS 32
+typedef uint64_t VoxelDataColumn;
+typedef uint32_t VoxelMarkedColumn;
 
 enum VoxelStatus {
   FREE = 0,
@@ -69,7 +74,7 @@ public:
    * @brief  Constructor for a voxel grid
    * @param size_x The x size of the grid
    * @param size_y The y size of the grid
-   * @param size_z The z size of the grid, only sizes <= 16 are supported
+   * @param size_z The z size of the grid, only sizes <= Z_VOXELS are supported
    */
   VoxelGrid(unsigned int size_x, unsigned int size_y, unsigned int size_z);
 
@@ -79,12 +84,17 @@ public:
    * @brief  Resizes a voxel grid to the desired size
    * @param size_x The x size of the grid
    * @param size_y The y size of the grid
-   * @param size_z The z size of the grid, only sizes <= 16 are supported
+   * @param size_z The z size of the grid, only sizes <= Z_VOXELS are supported
    */
   void resize(unsigned int size_x, unsigned int size_y, unsigned int size_z);
 
+  inline unsigned int getZVoxelCount()
+  {
+    return Z_VOXELS;
+  }
+
   void reset();
-  uint32_t* getData() { return data_; }
+  VoxelDataColumn* getData() { return data_; }
 
   inline void markVoxel(unsigned int x, unsigned int y, unsigned int z)
   {
@@ -93,7 +103,7 @@ public:
       ROS_DEBUG("Error, voxel out of bounds.\n");
       return;
     }
-    uint32_t full_mask = ((uint32_t)1<<z<<16) | (1<<z);
+    VoxelDataColumn full_mask = ((VoxelDataColumn)1LL<<z<<Z_VOXELS) | (1LL<<z);
     data_[y * size_x_ + x] |= full_mask; //clear unknown and mark cell
   }
 
@@ -106,11 +116,11 @@ public:
     }
 
     int index = y * size_x_ + x;
-    uint32_t* col = &data_[index];
-    uint32_t full_mask = ((uint32_t)1<<z<<16) | (1<<z);
+    VoxelDataColumn* col = &data_[index];
+    VoxelDataColumn full_mask = ((VoxelDataColumn)1LL<<z<<Z_VOXELS) | (1LL<<z);
     *col |= full_mask; //clear unknown and mark cell
 
-    unsigned int marked_bits = *col>>16;
+    VoxelMarkedColumn marked_bits = *col>>Z_VOXELS;
 
     //make sure the number of bits in each is below our thesholds
     return !bitsBelowThreshold(marked_bits, marked_threshold);
@@ -123,7 +133,7 @@ public:
       ROS_DEBUG("Error, voxel out of bounds.\n");
       return;
     }
-    uint32_t full_mask = ((uint32_t)1<<z<<16) | (1<<z);
+    VoxelDataColumn full_mask = ((VoxelDataColumn)1LL<<z<<Z_VOXELS) | (1LL<<z);
     data_[y * size_x_ + x] &= ~(full_mask); //clear unknown and clear cell
   }
 
@@ -141,12 +151,12 @@ public:
       return;
     }
     int index = y * size_x_ + x;
-    uint32_t* col = &data_[index];
-    uint32_t full_mask = ((uint32_t)1<<z<<16) | (1<<z);
+    VoxelDataColumn* col = &data_[index];
+    VoxelDataColumn full_mask = ((VoxelDataColumn)1LL<<z<<Z_VOXELS) | (1LL<<z);
     *col &= ~(full_mask); //clear unknown and clear cell
 
-    unsigned int unknown_bits = uint16_t(*col>>16) ^ uint16_t(*col);
-    unsigned int marked_bits = *col>>16;
+    VoxelDataColumn unknown_bits = VoxelMarkedColumn(*col>>Z_VOXELS) ^ VoxelMarkedColumn(*col);
+    VoxelDataColumn marked_bits = *col>>Z_VOXELS;
 
     //make sure the number of bits in each is below our thesholds
     if (bitsBelowThreshold(unknown_bits, 1) && bitsBelowThreshold(marked_bits, 1))
@@ -155,7 +165,7 @@ public:
     }
   }
 
-  inline bool bitsBelowThreshold(unsigned int n, unsigned int bit_threshold)
+  inline bool bitsBelowThreshold(VoxelDataColumn n, unsigned int bit_threshold)
   {
     unsigned int bit_count;
     for (bit_count = 0; n;)
@@ -165,32 +175,33 @@ public:
       {
         return false;
       }
-      n &= n - 1; //clear the least significant bit set
+      n &= n - 1LL; //clear the least significant bit set
     }
     return true;
   }
 
-  static inline unsigned int numBits(unsigned int n)
+  static inline unsigned int numBits(VoxelDataColumn n)
   {
     unsigned int bit_count;
     for (bit_count = 0; n; ++bit_count)
     {
-      n &= n - 1; //clear the least significant bit set
+      n &= n - 1LL; //clear the least significant bit set
     }
     return bit_count;
   }
 
   static VoxelStatus getVoxel(
     unsigned int x, unsigned int y, unsigned int z,
-    unsigned int size_x, unsigned int size_y, unsigned int size_z, const uint32_t* data)
+    unsigned int size_x, unsigned int size_y, unsigned int size_z, const VoxelDataColumn* data)
   {
     if (x >= size_x || y >= size_y || z >= size_z)
     {
       ROS_DEBUG("Error, voxel out of bounds. (%d, %d, %d)\n", x, y, z);
       return UNKNOWN;
     }
-    uint32_t full_mask = ((uint32_t)1<<z<<16) | (1<<z);
-    uint32_t result = data[y * size_x + x] & full_mask;
+    VoxelDataColumn full_mask = ((VoxelDataColumn)1LL<<z<<Z_VOXELS) | (1LL<<z);
+    VoxelDataColumn result = data[y * size_x + x] & full_mask;
+    // TODO(ahoy): no need to count bits here, can just check them
     unsigned int bits = numBits(result);
 
     // known marked: 11 = 2 bits, unknown: 01 = 1 bit, known free: 00 = 0 bits
@@ -240,7 +251,7 @@ public:
     int offset_dy = sign(dy) * size_x_;
     int offset_dz = sign(dz);
 
-    unsigned int z_mask = ((1 << 16) | 1) << (unsigned int)z0;
+    VoxelDataColumn z_mask = ((1LL << Z_VOXELS) | 1LL) << (unsigned int)z0;
     unsigned int offset = (unsigned int)y0 * size_x_ + (unsigned int)x0;
 
     GridOffset grid_off(offset);
@@ -284,7 +295,7 @@ private:
     ActionType at, OffA off_a, OffB off_b, OffC off_c,
     unsigned int abs_da, unsigned int abs_db, unsigned int abs_dc,
     int error_b, int error_c, int offset_a, int offset_b, int offset_c, unsigned int &offset,
-    unsigned int &z_mask, unsigned int max_length = UINT_MAX)
+    VoxelDataColumn &z_mask, unsigned int max_length = UINT_MAX)
   {
     unsigned int end = std::min(max_length, abs_da);
     for (unsigned int i = 0; i < end; ++i)
@@ -318,39 +329,39 @@ private:
   }
 
   unsigned int size_x_, size_y_, size_z_;
-  uint32_t *data_;
+  VoxelDataColumn *data_;
   unsigned char *costmap;
 
   //Aren't functors so much fun... used to recreate the Bresenham macro Eric wrote in the original version, but in "proper" c++
   class MarkVoxel
   {
   public:
-    MarkVoxel(uint32_t* data): data_(data){}
-    inline void operator()(unsigned int offset, unsigned int z_mask)
+    MarkVoxel(VoxelDataColumn* data): data_(data){}
+    inline void operator()(unsigned int offset, VoxelDataColumn z_mask)
     {
       data_[offset] |= z_mask; //clear unknown and mark cell
     }
   private:
-    uint32_t* data_;
+    VoxelDataColumn* data_;
   };
 
   class ClearVoxel
   {
   public:
-    ClearVoxel(uint32_t* data): data_(data){}
-    inline void operator()(unsigned int offset, unsigned int z_mask)
+    ClearVoxel(VoxelDataColumn* data): data_(data){}
+    inline void operator()(unsigned int offset, VoxelDataColumn z_mask)
     {
       data_[offset] &= ~(z_mask); //clear unknown and clear cell
     }
   private:
-    uint32_t* data_;
+    VoxelDataColumn* data_;
   };
 
   class ClearVoxelInMap
   {
   public:
     ClearVoxelInMap(
-      uint32_t* data, unsigned char *costmap,
+      VoxelDataColumn* data, unsigned char *costmap,
       unsigned int unknown_clear_threshold, unsigned int marked_clear_threshold,
       unsigned char free_cost = 0, unsigned char unknown_cost = 255): data_(data), costmap_(costmap),
       unknown_clear_threshold_(unknown_clear_threshold), marked_clear_threshold_(marked_clear_threshold),
@@ -358,13 +369,13 @@ private:
     {
     }
 
-    inline void operator()(unsigned int offset, unsigned int z_mask)
+    inline void operator()(unsigned int offset, VoxelDataColumn z_mask)
     {
-      uint32_t* col = &data_[offset];
+      VoxelDataColumn* col = &data_[offset];
       *col &= ~(z_mask); //clear unknown and clear cell
 
-      unsigned int unknown_bits = uint16_t(*col>>16) ^ uint16_t(*col);
-      unsigned int marked_bits = *col>>16;
+      VoxelMarkedColumn unknown_bits = VoxelMarkedColumn(*col>>Z_VOXELS) ^ VoxelMarkedColumn(*col);
+      VoxelMarkedColumn marked_bits = *col>>Z_VOXELS;
 
       //make sure the number of bits in each is below our thesholds
       if (bitsBelowThreshold(marked_bits, marked_clear_threshold_))
@@ -380,7 +391,7 @@ private:
       }
     }
   private:
-    inline bool bitsBelowThreshold(unsigned int n, unsigned int bit_threshold)
+    inline bool bitsBelowThreshold(VoxelDataColumn n, unsigned int bit_threshold)
     {
       unsigned int bit_count;
       for (bit_count = 0; n;)
@@ -390,12 +401,12 @@ private:
         {
           return false;
         }
-        n &= n - 1; //clear the least significant bit set
+        n &= n - 1LL; //clear the least significant bit set
       }
       return true;
     }
 
-    uint32_t* data_;
+    VoxelDataColumn* data_;
     unsigned char *costmap_;
     unsigned int unknown_clear_threshold_, marked_clear_threshold_;
     unsigned char free_cost_, unknown_cost_;
@@ -416,13 +427,13 @@ private:
   class ZOffset
   {
   public:
-    ZOffset(unsigned int &z_mask) : z_mask_(z_mask) {}
+    ZOffset(VoxelDataColumn &z_mask) : z_mask_(z_mask) {}
     inline void operator()(int offset_val)
     {
-      offset_val > 0 ? z_mask_ <<= 1 : z_mask_ >>= 1;
+      offset_val > 0 ? z_mask_ <<= 1LL : z_mask_ >>= 1LL;
     }
   private:
-    unsigned int & z_mask_;
+    VoxelDataColumn & z_mask_;
   };
 };
 

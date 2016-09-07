@@ -71,7 +71,7 @@ void voxelCallback(const ros::Publisher& pub_marked, const ros::Publisher& pub_u
   ROS_DEBUG("Received voxel grid");
   const std::string frame_id = grid->header.frame_id;
   const ros::Time stamp = grid->header.stamp;
-  const uint32_t* data = &grid->data.front();
+  const voxel_grid::VoxelDataColumn* data = &grid->data.front();
   const double x_origin = grid->origin.x;
   const double y_origin = grid->origin.y;
   const double z_origin = grid->origin.z;

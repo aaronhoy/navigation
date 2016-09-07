@@ -45,14 +45,14 @@ namespace voxel_grid {
     size_y_ = size_y; 
     size_z_ = size_z; 
 
-    if(size_z_ > 16){
-      ROS_INFO("Error, this implementation can only support up to 16 z values (%d)", size_z_); 
-      size_z_ = 16;
+    if(size_z_ > Z_VOXELS){
+      ROS_INFO("Error, this implementation can only support up to %d z values (%d)", Z_VOXELS, size_z_);
+      size_z_ = Z_VOXELS;
     }
 
-    data_ = new uint32_t[size_x_ * size_y_];
-    uint32_t unknown_col = ~((uint32_t)0)>>16;
-    uint32_t* col = data_;
+    data_ = new VoxelDataColumn[size_x_ * size_y_];
+    VoxelDataColumn unknown_col = ~((VoxelDataColumn)0LL)>>Z_VOXELS;
+    VoxelDataColumn* col = data_;
     for(unsigned int i = 0; i < size_x_ * size_y_; ++i){
       *col = unknown_col;
       ++col;
@@ -72,14 +72,14 @@ namespace voxel_grid {
     size_y_ = size_y; 
     size_z_ = size_z; 
 
-    if(size_z_ > 16){
-      ROS_INFO("Error, this implementation can only support up to 16 z values (%d)", size_z); 
-      size_z_ = 16;
+    if(size_z_ > Z_VOXELS){
+      ROS_INFO("Error, this implementation can only support up to %d z values (%d)", Z_VOXELS, size_z); 
+      size_z_ = Z_VOXELS;
     }
 
-    data_ = new uint32_t[size_x_ * size_y_];
-    uint32_t unknown_col = ~((uint32_t)0)>>16;
-    uint32_t* col = data_;
+    data_ = new VoxelDataColumn[size_x_ * size_y_];
+    VoxelDataColumn unknown_col = ~((VoxelDataColumn)0LL)>>Z_VOXELS;
+    VoxelDataColumn* col = data_;
     for(unsigned int i = 0; i < size_x_ * size_y_; ++i){
       *col = unknown_col;
       ++col;
@@ -92,8 +92,8 @@ namespace voxel_grid {
   }
 
   void VoxelGrid::reset(){
-    uint32_t unknown_col = ~((uint32_t)0)>>16;
-    uint32_t* col = data_;
+    VoxelDataColumn unknown_col = ~((VoxelDataColumn)0LL)>>Z_VOXELS;
+    VoxelDataColumn* col = data_;
     for(unsigned int i = 0; i < size_x_ * size_y_; ++i){
       *col = unknown_col;
       ++col;
@@ -146,8 +146,8 @@ namespace voxel_grid {
       ROS_DEBUG("Error, voxel out of bounds. (%d, %d, %d)\n", x, y, z);
       return UNKNOWN;
     }
-    uint32_t full_mask = ((uint32_t)1<<z<<16) | (1<<z);
-    uint32_t result = data_[y * size_x_ + x] & full_mask; 
+    VoxelDataColumn full_mask = ((VoxelDataColumn)1LL<<z<<Z_VOXELS) | (1LL<<z);
+    VoxelDataColumn result = data_[y * size_x_ + x] & full_mask; 
     unsigned int bits = numBits(result);
 
     // known marked: 11 = 2 bits, unknown: 01 = 1 bit, known free: 00 = 0 bits
@@ -168,10 +168,10 @@ namespace voxel_grid {
       return UNKNOWN;
     }
     
-    uint32_t* col = &data_[y * size_x_ + x];
+    VoxelDataColumn* col = &data_[y * size_x_ + x];
 
-    unsigned int unknown_bits = uint16_t(*col>>16) ^ uint16_t(*col);
-    unsigned int marked_bits = *col>>16;
+    VoxelMarkedColumn unknown_bits = VoxelMarkedColumn(*col>>Z_VOXELS) ^ VoxelMarkedColumn(*col);
+    VoxelMarkedColumn marked_bits = *col>>Z_VOXELS;
 
     //check if the number of marked bits qualifies the col as marked
     if(!bitsBelowThreshold(marked_bits, marked_threshold)){
@@ -213,7 +213,7 @@ namespace voxel_grid {
     printf("Column view:\n");
     for(unsigned int y = 0; y < size_y_; y++){
       for(unsigned int x = 0 ; x < size_x_; x++){
-        printf((getVoxelColumn(x, y, 16, 0) == voxel_grid::MARKED)? "#" : " ");
+        printf((getVoxelColumn(x, y, Z_VOXELS, 0) == voxel_grid::MARKED)? "#" : " ");
       }
       printf("|\n");
     } 
