@@ -264,8 +264,8 @@ public:
     //is x dominant
     if (abs_dx >= max(abs_dy, abs_dz))
     {
-      int error_y = abs_dx / 2;
-      int error_z = abs_dx / 2;
+      int error_y = abs_dx * (y0 - (int)y0);
+      int error_z = abs_dx * (z0 - (int)z0);
 
       bresenham3D(at, grid_off, grid_off, z_off, abs_dx, abs_dy, abs_dz, error_y, error_z, offset_dx, offset_dy, offset_dz, offset, z_mask, (unsigned int)(scale * abs_dx));
       return;
@@ -274,16 +274,16 @@ public:
     //y is dominant
     if (abs_dy >= abs_dz)
     {
-      int error_x = abs_dy / 2;
-      int error_z = abs_dy / 2;
+      int error_x = abs_dy * (x0 - (int)x0);
+      int error_z = abs_dy * (z0 - (int)z0);
 
       bresenham3D(at, grid_off, grid_off, z_off, abs_dy, abs_dx, abs_dz, error_x, error_z, offset_dy, offset_dx, offset_dz, offset, z_mask, (unsigned int)(scale * abs_dy));
       return;
     }
 
     //otherwise, z is dominant
-    int error_x = abs_dz / 2;
-    int error_y = abs_dz / 2;
+    int error_x = abs_dz * (x0 - (int)x0);
+    int error_y = abs_dz * (y0 - (int)y0);
 
     bresenham3D(at, z_off, grid_off, grid_off, abs_dz, abs_dx, abs_dy, error_x, error_y, offset_dz, offset_dx, offset_dy, offset, z_mask, (unsigned int)(scale * abs_dz));
   }
