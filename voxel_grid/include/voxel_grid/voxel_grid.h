@@ -296,7 +296,7 @@ public:
       int error_y = abs_dx * y_at_m;
       int error_z = abs_dx * z_at_m;
 
-      bresenham3D(at, grid_off, grid_off, z_off, abs_dx, abs_dy, abs_dz, error_y, error_z, offset_dx, offset_dy, offset_dz, offset, z_mask, (unsigned int)(scale * (abs_dx >> FP_BITS)));
+      bresenham3D(at, grid_off, grid_off, z_off, abs_dx, abs_dy, abs_dz, error_y, error_z, offset_dx, offset_dy, offset_dz, offset, z_mask, (unsigned int)(scale * std::fabs(x1 - x0) + 0.5));
       return;
     }
 
@@ -315,7 +315,7 @@ public:
       int error_x = abs_dy * x_at_m;
       int error_z = abs_dy * z_at_m;
 
-      bresenham3D(at, grid_off, grid_off, z_off, abs_dy, abs_dx, abs_dz, error_x, error_z, offset_dy, offset_dx, offset_dz, offset, z_mask, (unsigned int)(scale * (abs_dy >> FP_BITS)));
+      bresenham3D(at, grid_off, grid_off, z_off, abs_dy, abs_dx, abs_dz, error_x, error_z, offset_dy, offset_dx, offset_dz, offset, z_mask, (unsigned int)(scale * std::fabs(y1 - y0) + 0.5));
       return;
     }
 
@@ -332,7 +332,7 @@ public:
     int error_x = abs_dz * x_at_m;
     int error_y = abs_dz * y_at_m;
 
-    bresenham3D(at, z_off, grid_off, grid_off, abs_dz, abs_dx, abs_dy, error_x, error_y, offset_dz, offset_dx, offset_dy, offset, z_mask, (unsigned int)(scale * (abs_dz >> FP_BITS)));
+    bresenham3D(at, z_off, grid_off, grid_off, abs_dz, abs_dx, abs_dy, error_x, error_y, offset_dz, offset_dx, offset_dy, offset, z_mask, (unsigned int)(scale * std::fabs(z1 - z0) + 0.5));
   }
 
 private:
@@ -353,6 +353,81 @@ private:
       off_a(offset_a);
       error_b += abs_db;
       error_c += abs_dc;
+
+      if (((unsigned int)error_b >= abs_da) && ((unsigned int)error_c >= abs_da))
+      {
+        if (error_b > error_c)
+        {
+          // If b cut over first, do it's stuff first
+          off_b(offset_b);
+          error_b -= abs_da;
+
+          if (error_b + errorprev_b < abs_da)
+          {
+            off_b(-offset_b);
+            at(offset, z_mask);
+            off_b(offset_b);
+          }
+          else
+          {
+            off_a(-offset_a);
+            at(offset, z_mask);
+            off_a(offset_a);
+          }
+
+          off_c(offset_c);
+          error_c -= abs_da;
+
+          if (error_c + errorprev_c < abs_da)
+          {
+            off_c(-offset_c);
+            at(offset, z_mask);
+            off_c(offset_c);
+          }
+          else
+          {
+            off_a(-offset_a);
+            at(offset, z_mask);
+            off_a(offset_a);
+          }
+        }
+        else
+        {
+          off_c(offset_c);
+          error_c -= abs_da;
+
+          if (error_c + errorprev_c < abs_da)
+          {
+            off_c(-offset_c);
+            at(offset, z_mask);
+            off_c(offset_c);
+          }
+          else
+          {
+            off_a(-offset_a);
+            at(offset, z_mask);
+            off_a(offset_a);
+          }
+
+
+          off_b(offset_b);
+          error_b -= abs_da;
+
+          if (error_b + errorprev_b < abs_da)
+          {
+            off_b(-offset_b);
+            at(offset, z_mask);
+            off_b(offset_b);
+          }
+          else
+          {
+            off_a(-offset_a);
+            at(offset, z_mask);
+            off_a(offset_a);
+          }
+        }
+      }
+
       if ((unsigned int)error_b >= abs_da)
       {
         off_b(offset_b);
