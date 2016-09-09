@@ -234,14 +234,16 @@ public:
   unsigned int sizeY();
   unsigned int sizeZ();
 
+  #define FP_BITS 4
+
   template <class ActionType>
   inline void raytraceLine(
     ActionType at, double x0, double y0, double z0,
     double x1, double y1, double z1, unsigned int max_length = UINT_MAX)
   {
-    int dx = int(x1) - int(x0);
-    int dy = int(y1) - int(y0);
-    int dz = int(z1) - int(z0);
+    int dx = int((x1 - x0) * (1<<FP_BITS));
+    int dy = int((y1 - y0) * (1<<FP_BITS));
+    int dz = int((z1 - z0) * (1<<FP_BITS));
 
     unsigned int abs_dx = abs(dx);
     unsigned int abs_dy = abs(dy);
@@ -261,31 +263,76 @@ public:
     double dist = sqrt((x0 - x1) * (x0 - x1) + (y0 - y1) * (y0 - y1) + (z0 - z1) * (z0 - z1));
     double scale = std::min(1.0,  max_length / dist);
 
+    double ex = x0 - (int)x0;
+    if (dx < 0)
+    {
+      ex = 1.0 - ex;
+    }
+
+    double ey = y0 - (int)y0;
+    if (dy < 0)
+    {
+      ey = 1.0 - ey;
+    }
+
+    double ez = z0 - (int)z0;
+    if (dz < 0)
+    {
+      ez = 1.0 - ez;
+    }
+
     //is x dominant
     if (abs_dx >= max(abs_dy, abs_dz))
     {
-      int error_y = abs_dx * (y0 - (int)y0);
-      int error_z = abs_dx * (z0 - (int)z0);
+      // Find out how far we have to go along major axis to get to the middle
+      // (which is where the algorithm assumes we are)
+      double d_ex_m = 0.5 - ex;
 
-      bresenham3D(at, grid_off, grid_off, z_off, abs_dx, abs_dy, abs_dz, error_y, error_z, offset_dx, offset_dy, offset_dz, offset, z_mask, (unsigned int)(scale * abs_dx));
+      // Now advance the other axes' errors by that times the slope
+      double y_at_m = ey + ((d_ex_m * abs_dy) / abs_dx);
+      double z_at_m = ez + ((d_ex_m * abs_dz) / abs_dx);
+
+      // Set errors to scale assuming that starting point in the cell
+      int error_y = abs_dx * y_at_m;
+      int error_z = abs_dx * z_at_m;
+
+      bresenham3D(at, grid_off, grid_off, z_off, abs_dx, abs_dy, abs_dz, error_y, error_z, offset_dx, offset_dy, offset_dz, offset, z_mask, (unsigned int)(scale * (abs_dx >> FP_BITS)));
       return;
     }
 
     //y is dominant
     if (abs_dy >= abs_dz)
     {
-      int error_x = abs_dy * (x0 - (int)x0);
-      int error_z = abs_dy * (z0 - (int)z0);
+      // Find out how far we have to go along major axis to get to the middle
+      // (which is where the algorithm assumes we are)
+      double d_ey_m = 0.5 - ey;
 
-      bresenham3D(at, grid_off, grid_off, z_off, abs_dy, abs_dx, abs_dz, error_x, error_z, offset_dy, offset_dx, offset_dz, offset, z_mask, (unsigned int)(scale * abs_dy));
+      // Now advance the other axes' errors by that times the slope
+      double x_at_m = ex + ((d_ey_m * abs_dx) / abs_dy);
+      double z_at_m = ez + ((d_ey_m * abs_dz) / abs_dy);
+
+      // Set errors to scale assuming that starting point in the cell
+      int error_x = abs_dy * x_at_m;
+      int error_z = abs_dy * z_at_m;
+
+      bresenham3D(at, grid_off, grid_off, z_off, abs_dy, abs_dx, abs_dz, error_x, error_z, offset_dy, offset_dx, offset_dz, offset, z_mask, (unsigned int)(scale * (abs_dy >> FP_BITS)));
       return;
     }
 
     //otherwise, z is dominant
-    int error_x = abs_dz * (x0 - (int)x0);
-    int error_y = abs_dz * (y0 - (int)y0);
+    // Find out how far we have to go along major axis to get to the middle
+    // (which is where the algorithm assumes we are)
+    double d_ez_m = 0.5 - ez;
 
-    bresenham3D(at, z_off, grid_off, grid_off, abs_dz, abs_dx, abs_dy, error_x, error_y, offset_dz, offset_dx, offset_dy, offset, z_mask, (unsigned int)(scale * abs_dz));
+    // Now advance the other axes' errors by that times the slope
+    double x_at_m = ex + ((d_ez_m * abs_dx) / abs_dz);
+    double y_at_m = ey + ((d_ez_m * abs_dy) / abs_dz);
+
+    // Set errors to scale assuming that starting point in the cell
+    int error_x = abs_dz * x_at_m;
+    int error_y = abs_dz * y_at_m;
+
+    bresenham3D(at, z_off, grid_off, grid_off, abs_dz, abs_dx, abs_dy, error_x, error_y, offset_dz, offset_dx, offset_dy, offset, z_mask, (unsigned int)(scale * (abs_dz >> FP_BITS)));
   }
 
 private:
@@ -297,8 +344,10 @@ private:
     int error_b, int error_c, int offset_a, int offset_b, int offset_c, unsigned int &offset,
     VoxelDataColumn &z_mask, unsigned int max_length = UINT_MAX)
   {
-    unsigned int end = std::min(max_length, abs_da);
-    for (unsigned int i = 0; i < end; ++i)
+    int errorprev_b = error_b;
+    int errorprev_c = error_c;
+
+    for (unsigned int i = 0; i < max_length; ++i)
     {
       at(offset, z_mask);
       off_a(offset_a);
@@ -308,12 +357,43 @@ private:
       {
         off_b(offset_b);
         error_b -= abs_da;
+
+        if (error_b + errorprev_b < abs_da)
+        {
+          off_b(-offset_b);
+          at(offset, z_mask);
+          off_b(offset_b);
+        }
+        else
+        {
+          off_a(-offset_a);
+          at(offset, z_mask);
+          off_a(offset_a);
+        }
+        // TODO(ahoy): can add both case here
       }
       if ((unsigned int)error_c >= abs_da)
       {
         off_c(offset_c);
         error_c -= abs_da;
+
+        if (error_c + errorprev_c < abs_da)
+        {
+          off_c(-offset_c);
+          at(offset, z_mask);
+          off_c(offset_c);
+        }
+        else
+        {
+          off_a(-offset_a);
+          at(offset, z_mask);
+          off_a(offset_a);
+        }
+        // TODO(ahoy): can add both case here
       }
+
+      errorprev_b = error_b;
+      errorprev_c = error_c;
     }
     at(offset, z_mask);
   }
